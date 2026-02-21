@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DS402 torque step-response exercise (safe low-level command profile)."""
+"""Safe DS402 state-control check: fault reset + enable, zero setpoints only."""
 
 from __future__ import annotations
 
@@ -21,9 +21,7 @@ from ethercat_core.slaves.ds402.data_types import Command, ModeOfOperation
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Run a safe DS402 torque step-response test."
-    )
+    parser = argparse.ArgumentParser(description="Run DS402 zero-setpoint enable sequence.")
     parser.add_argument(
         "--topology",
         default="config/topology.debug.json",
@@ -37,25 +35,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--duration-s",
         type=float,
-        default=10.0,
+        default=8.0,
         help="Total test duration.",
     )
     parser.add_argument(
-        "--step-time-s",
+        "--fault-reset-s",
         type=float,
-        default=2.0,
-        help="Time from test start to apply the step command.",
-    )
-    parser.add_argument(
-        "--step-torque",
-        type=float,
-        default=100.0,
-        help="Post-step target torque command (raw typed units).",
+        default=0.5,
+        help="Duration of fault-reset phase at start.",
     )
     parser.add_argument(
         "--print-hz",
         type=float,
-        default=10.0,
+        default=5.0,
         help="Status print rate.",
     )
     return parser.parse_args()
@@ -69,9 +61,7 @@ def main() -> int:
     try:
         runtime = master.initialize()
         if args.slave not in runtime.adapters:
-            raise RuntimeError(
-                f"Unknown slave '{args.slave}'. Available: {list(runtime.adapters.keys())}"
-            )
+            raise RuntimeError(f"Unknown slave '{args.slave}'. Available: {list(runtime.adapters.keys())}")
         startup_params = runtime.startup_params.get(args.slave, {})
         if startup_params:
             print(
@@ -92,57 +82,50 @@ def main() -> int:
         loop = EthercatLoop(runtime, cycle_hz=cfg.cycle_hz)
         loop.start()
 
-        start = time.monotonic()
-        deadline = start + max(0.0, args.duration_s)
-        step_time = start + max(0.0, args.step_time_s)
+        t0 = time.monotonic()
+        deadline = t0 + max(0.0, args.duration_s)
+        reset_deadline = t0 + max(0.0, args.fault_reset_s)
         print_period = 1.0 / max(args.print_hz, 0.1)
-        next_print = start
+        next_print = t0
 
         while time.monotonic() < deadline:
             now = time.monotonic()
-            target_torque = args.step_torque if now >= step_time else 0.0
+            in_reset = now < reset_deadline
 
-            loop.set_command(
-                SystemCommand(
-                    by_slave={
-                        args.slave: Command(
-                            mode_of_operation=ModeOfOperation.CYCLIC_SYNC_TORQUE,
-                            target_torque_nm=target_torque,
-                            target_velocity_rad_s=0.0,
-                            target_position_rad=0.0,
-                            torque_kp=torque_kp,
-                            torque_loop_max_output=vel_qr,
-                            torque_loop_min_output=vel_is,
-                            velocity_loop_kp=vel_kp,
-                            velocity_loop_ki=vel_ki,
-                            velocity_loop_kd=vel_kd,
-                            position_loop_kp=pos_kp,
-                            position_loop_ki=pos_ki,
-                            position_loop_kd=pos_kd,
-                            enable_drive=True,
-                            clear_fault=False,
-                        )
-                    }
-                )
+            cmd = Command(
+                mode_of_operation=ModeOfOperation.CYCLIC_SYNC_TORQUE,
+                target_torque_nm=0.0,
+                target_velocity_rad_s=0.0,
+                target_position_rad=0.0,
+                torque_kp=torque_kp,
+                torque_loop_max_output=vel_qr,
+                torque_loop_min_output=vel_is,
+                velocity_loop_kp=vel_kp,
+                velocity_loop_ki=vel_ki,
+                velocity_loop_kd=vel_kd,
+                position_loop_kp=pos_kp,
+                position_loop_ki=pos_ki,
+                position_loop_kd=pos_kd,
+                enable_drive=not in_reset,
+                clear_fault=in_reset,
             )
+            loop.set_command(SystemCommand(by_slave={args.slave: cmd}))
 
             if now >= next_print:
                 status = loop.get_status()
                 stats = loop.stats
                 ds = status.by_slave.get(args.slave)
                 if ds is None:
-                    print(
-                        f"cycle={stats.cycle_count} wkc={stats.last_wkc} command={target_torque:.3f} no status yet"
-                    )
+                    print(f"cycle={stats.cycle_count} wkc={stats.last_wkc} no status yet")
                 else:
                     print(
                         f"cycle={stats.cycle_count} wkc={stats.last_wkc} "
-                        f"command={target_torque:.3f} measured={ds.measured_torque_nm:.3f} "
-                        f"vel={ds.measured_velocity_rad_s:.3f} state={ds.cia402_state.name}"
+                        f"state={ds.cia402_state.name} status=0x{ds.status_word:04X} "
+                        f"fault={ds.fault} op_en={ds.operation_enabled} err=0x{ds.error_code:04X}"
                     )
                 next_print = now + print_period
 
-            time.sleep(0.002)
+            time.sleep(0.005)
 
         loop.stop()
         return 0
