@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover - depends on host environment.
 
 from .data_types import EthercatAlStates
 from .slaves.base import SdoReadSpec, SlaveAdapter, SlaveIdentity
+from .slaves.beckhoff.el2004.adapter import El2004SlaveAdapter
 from .slaves.ds402.adapter import Ds402SlaveAdapter
 from .slaves.ds402.pdo import PdoScaling
 
@@ -110,6 +111,8 @@ def _build_adapter(cfg: SlaveConfig) -> SlaveAdapter[Any, Any]:
             position_lsb_per_rad=float(cfg.scaling.get("position_lsb_per_rad", 10000.0)),
         )
         return Ds402SlaveAdapter(identity=identity, scaling=scaling)
+    if cfg.kind == "EL2004":
+        return El2004SlaveAdapter(identity=identity)
 
     raise MasterConfigError(f"Unsupported slave kind '{cfg.kind}' for '{cfg.name}'.")
 
@@ -142,17 +145,14 @@ class EthercatMaster:
         # Ensure bus is in PRE-OP before any SDO-based PDO remap writes.
         self._transition_to_preop(master)
 
+        for cfg in self.config.slaves:
+            cfg.position = self._resolve_configured_position(master, cfg)
+
         adapters = {cfg.name: _build_adapter(cfg) for cfg in self.config.slaves}
         slaves_by_name: Dict[str, Any] = {}
         startup_params: Dict[str, Dict[str, Any]] = {}
 
         for cfg in self.config.slaves:
-            if cfg.position >= len(master.slaves):
-                master.close()
-                raise MasterConfigError(
-                    f"Configured position {cfg.position} out of range; detected {len(master.slaves)} slaves."
-                )
-
             slave = master.slaves[cfg.position]
             self._validate_identity(cfg, slave)
             startup_params[cfg.name] = self._read_adapter_startup_params(
@@ -248,6 +248,29 @@ class EthercatMaster:
             raise MasterConfigError(
                 f"Slave '{cfg.name}' product mismatch: expected=0x{cfg.product_code:08X} got=0x{int(slave.id):08X}"
             )
+
+    @staticmethod
+    def _matches_identity(cfg: SlaveConfig, slave: Any) -> bool:
+        vendor_matches = not cfg.vendor_id or int(slave.man) == cfg.vendor_id
+        product_matches = not cfg.product_code or int(slave.id) == cfg.product_code
+        return vendor_matches and product_matches
+
+    @staticmethod
+    def _resolve_configured_position(master: Any, cfg: SlaveConfig) -> int:
+        slave_count = len(master.slaves)
+        if cfg.position < slave_count:
+            configured_slave = master.slaves[cfg.position]
+            if EthercatMaster._matches_identity(cfg, configured_slave):
+                return cfg.position
+
+        for position, slave in enumerate(master.slaves):
+            if EthercatMaster._matches_identity(cfg, slave):
+                return position
+
+        raise MasterConfigError(
+            f"No EtherCAT slave matched '{cfg.name}' "
+            f"(vendor=0x{cfg.vendor_id:08X}, product=0x{cfg.product_code:08X})."
+        )
 
     @staticmethod
     def _read_adapter_startup_params(
@@ -483,34 +506,6 @@ def resolve_slave_position(config: MasterConfig, slave_name: str) -> int:
         if slave_count <= 0:
             raise RuntimeError("No EtherCAT slaves detected.")
 
-        if target_cfg.position < len(master.slaves):
-            configured_slave = master.slaves[target_cfg.position]
-            vendor_matches = (
-                not target_cfg.vendor_id or int(configured_slave.man) == target_cfg.vendor_id
-            )
-            product_matches = (
-                not target_cfg.product_code or int(configured_slave.id) == target_cfg.product_code
-            )
-            if vendor_matches and product_matches:
-                return target_cfg.position
-
-        matches: List[int] = []
-        for position, slave in enumerate(master.slaves):
-            vendor_matches = (
-                not target_cfg.vendor_id or int(slave.man) == target_cfg.vendor_id
-            )
-            product_matches = (
-                not target_cfg.product_code or int(slave.id) == target_cfg.product_code
-            )
-            if vendor_matches and product_matches:
-                matches.append(position)
-
-        if not matches:
-            raise MasterConfigError(
-                f"No EtherCAT slave matched '{slave_name}' "
-                f"(vendor=0x{target_cfg.vendor_id:08X}, product=0x{target_cfg.product_code:08X})."
-            )
-
-        return matches[0]
+        return EthercatMaster._resolve_configured_position(master, target_cfg)
     finally:
         master.close()
