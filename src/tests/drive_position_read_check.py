@@ -15,7 +15,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from ethercat_core.loop import EthercatLoop
-from ethercat_core.master import EthercatMaster, load_topology
+from ethercat_core.master import EthercatMaster, load_topology, resolve_slave_position
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,6 +50,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     cfg = load_topology(args.topology)
+    resolved_position = resolve_slave_position(cfg, args.slave)
+    for slave_cfg in cfg.slaves:
+        if slave_cfg.name == args.slave:
+            slave_cfg.position = resolved_position
+            break
     master = EthercatMaster(cfg)
 
     try:
@@ -67,7 +72,8 @@ def main() -> int:
         next_print = time.monotonic()
 
         print(
-            f"Monitoring '{args.slave}' position (TxPDO 0x1A00:3, object 0x6064) for {args.duration_s:.1f}s"
+            f"Monitoring '{args.slave}' at position {resolved_position} "
+            f"(TxPDO 0x1A00:3, object 0x6064) for {args.duration_s:.1f}s"
         )
 
         while time.monotonic() < deadline:

@@ -16,7 +16,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from ethercat_core.loop import EthercatLoop
-from ethercat_core.master import EthercatMaster, al_state_name, load_topology
+from ethercat_core.master import (
+    EthercatMaster,
+    al_state_name,
+    load_topology,
+    resolve_slave_position,
+)
 from ethercat_core.slaves.ds402.data_types import DriveStatus
 
 MAX_FIELDS = 6
@@ -110,6 +115,11 @@ def _prompt_for_fields(available: list[str]) -> list[str]:
 def main() -> int:
     args = parse_args()
     cfg = load_topology(args.topology)
+    resolved_position = resolve_slave_position(cfg, args.slave)
+    for slave_cfg in cfg.slaves:
+        if slave_cfg.name == args.slave:
+            slave_cfg.position = resolved_position
+            break
     master = EthercatMaster(cfg)
 
     available = _available_fields()
@@ -140,7 +150,10 @@ def main() -> int:
         print_period = 1.0 / max(args.print_hz, 0.1)
         next_print = time.monotonic()
 
-        print(f"Monitoring '{args.slave}' for {args.duration_s:.1f}s")
+        print(
+            f"Monitoring '{args.slave}' at position {resolved_position} "
+            f"for {args.duration_s:.1f}s"
+        )
         print("Fields:", ", ".join(selected))
 
         while time.monotonic() < deadline:

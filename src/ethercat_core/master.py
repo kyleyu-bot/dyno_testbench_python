@@ -456,3 +456,61 @@ def al_state_name(state_code: int) -> str:
     }
     label = mapping.get(base, f"UNKNOWN(0x{state_code:02X})")
     return f"{label}+ERR" if has_error else label
+
+
+def resolve_slave_position(config: MasterConfig, slave_name: str) -> int:
+    """
+    Resolve a configured slave name to a live bus position.
+
+    The configured position is used first. If that position is missing or its
+    vendor/product identity does not match the topology entry, the full chain is
+    scanned for a matching vendor/product pair.
+    """
+
+    if pysoem is None:
+        raise RuntimeError("pysoem is not installed in this environment.")
+
+    target_cfg = next((cfg for cfg in config.slaves if cfg.name == slave_name), None)
+    if target_cfg is None:
+        raise MasterConfigError(
+            f"Unknown configured slave '{slave_name}'. Available: {[cfg.name for cfg in config.slaves]}"
+        )
+
+    master = pysoem.Master()
+    master.open(config.iface)
+    try:
+        slave_count = master.config_init()
+        if slave_count <= 0:
+            raise RuntimeError("No EtherCAT slaves detected.")
+
+        if target_cfg.position < len(master.slaves):
+            configured_slave = master.slaves[target_cfg.position]
+            vendor_matches = (
+                not target_cfg.vendor_id or int(configured_slave.man) == target_cfg.vendor_id
+            )
+            product_matches = (
+                not target_cfg.product_code or int(configured_slave.id) == target_cfg.product_code
+            )
+            if vendor_matches and product_matches:
+                return target_cfg.position
+
+        matches: List[int] = []
+        for position, slave in enumerate(master.slaves):
+            vendor_matches = (
+                not target_cfg.vendor_id or int(slave.man) == target_cfg.vendor_id
+            )
+            product_matches = (
+                not target_cfg.product_code or int(slave.id) == target_cfg.product_code
+            )
+            if vendor_matches and product_matches:
+                matches.append(position)
+
+        if not matches:
+            raise MasterConfigError(
+                f"No EtherCAT slave matched '{slave_name}' "
+                f"(vendor=0x{target_cfg.vendor_id:08X}, product=0x{target_cfg.product_code:08X})."
+            )
+
+        return matches[0]
+    finally:
+        master.close()

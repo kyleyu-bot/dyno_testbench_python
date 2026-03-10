@@ -17,7 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from ethercat_core.data_types import SystemCommand
 from ethercat_core.loop import EthercatLoop
-from ethercat_core.master import EthercatMaster, load_topology
+from ethercat_core.master import EthercatMaster, load_topology, resolve_slave_position
 from ethercat_core.slaves.base import SdoReadSpec
 from ethercat_core.slaves.ds402.data_types import Command, ModeOfOperation
 
@@ -197,6 +197,11 @@ def main() -> int:
         ) from exc
 
     cfg = load_topology(args.topology)
+    resolved_position = resolve_slave_position(cfg, args.slave)
+    for slave_cfg in cfg.slaves:
+        if slave_cfg.name == args.slave:
+            slave_cfg.position = resolved_position
+            break
     master = EthercatMaster(cfg)
 
     try:
@@ -228,6 +233,7 @@ def main() -> int:
         if args.force_sdo_mode:
             _write_mode_sdo(runtime, args.slave, args.mode)
             print(f"Forced SDO mode write: 0x6060={args.mode}")
+        print(f"Using '{args.slave}' at position {resolved_position}")
 
         loop = EthercatLoop(runtime, cycle_hz=cfg.cycle_hz)
         loop.start()
