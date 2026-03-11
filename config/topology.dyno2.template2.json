@@ -81,9 +81,16 @@
       "vendor_id": 2,
       "product_code": 131346514,
       "scaling": {},
-      "pdo_mapping": [
-        
-      ]
+      "pdo_mapping": []
+    },
+    {
+      "name": "encoder_interface",
+      "position": 3,
+      "kind": "EL5032",
+      "vendor_id": 2,
+      "product_code": 329789522,
+      "scaling": {},
+      "pdo_mapping": []
     }
   ]
 }
