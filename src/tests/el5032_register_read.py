@@ -17,7 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 from ethercat_core.master import (
     MasterConfigError,
     load_topology,
-    pysoem,
+    require_pysoem,
     resolve_slave_position,
 )
 
@@ -54,10 +54,11 @@ def parse_args() -> argparse.Namespace:
         help="Register print rate.",
     )
     return parser.parse_args()
+
+
 def main() -> int:
     args = parse_args()
-    if pysoem is None:
-        raise RuntimeError("pysoem is not installed in this environment.")
+    pysoem = require_pysoem()
 
     cfg = load_topology(args.topology)
     resolved_position = resolve_slave_position(cfg, args.slave)

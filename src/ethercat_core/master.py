@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import struct
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,12 +18,35 @@ except ImportError:  # pragma: no cover - depends on host environment.
 from .data_types import EthercatAlStates
 from .slaves.base import SdoReadSpec, SlaveAdapter, SlaveIdentity
 from .slaves.beckhoff.el2004.adapter import El2004SlaveAdapter
+from .slaves.beckhoff.el3002.adapter import El3002SlaveAdapter
+from .slaves.beckhoff.el5032.adapter import El5032SlaveAdapter
 from .slaves.ds402.adapter import Ds402SlaveAdapter
 from .slaves.ds402.pdo import PdoScaling
 
 
 class MasterConfigError(RuntimeError):
     """Raised for invalid topology configuration or startup mismatch."""
+
+
+def _pysoem_missing_message() -> str:
+    repo_root = Path(__file__).resolve().parents[2]
+    venv_python = repo_root / ".venv-ecat" / "bin" / "python"
+    return (
+        "pysoem is not installed for the active interpreter.\n"
+        f"interpreter: {sys.executable}\n"
+        "Install it with the repo bootstrap script:\n"
+        f"  {repo_root}/scripts/bootstrap_venv_ecat.sh\n"
+        "Then run this tool with the EtherCAT venv interpreter:\n"
+        f"  {venv_python} <script> [args]"
+    )
+
+
+def require_pysoem() -> Any:
+    """Return the imported pysoem module or raise with setup guidance."""
+
+    if pysoem is None:
+        raise RuntimeError(_pysoem_missing_message())
+    return pysoem
 
 
 @dataclass(slots=True)
@@ -113,6 +137,10 @@ def _build_adapter(cfg: SlaveConfig) -> SlaveAdapter[Any, Any]:
         return Ds402SlaveAdapter(identity=identity, scaling=scaling)
     if cfg.kind == "EL2004":
         return El2004SlaveAdapter(identity=identity)
+    if cfg.kind == "EL3002":
+        return El3002SlaveAdapter(identity=identity)
+    if cfg.kind == "EL5032":
+        return El5032SlaveAdapter(identity=identity)
 
     raise MasterConfigError(f"Unsupported slave kind '{cfg.kind}' for '{cfg.name}'.")
 
@@ -131,10 +159,9 @@ class EthercatMaster:
         return self._runtime
 
     def initialize(self) -> MasterRuntime:
-        if pysoem is None:
-            raise RuntimeError("pysoem is not installed in this environment.")
+        pysoem_mod = require_pysoem()
 
-        master = pysoem.Master()
+        master = pysoem_mod.Master()
         master.open(self.config.iface)
 
         slave_count = master.config_init()
@@ -490,8 +517,7 @@ def resolve_slave_position(config: MasterConfig, slave_name: str) -> int:
     scanned for a matching vendor/product pair.
     """
 
-    if pysoem is None:
-        raise RuntimeError("pysoem is not installed in this environment.")
+    pysoem_mod = require_pysoem()
 
     target_cfg = next((cfg for cfg in config.slaves if cfg.name == slave_name), None)
     if target_cfg is None:
@@ -499,7 +525,7 @@ def resolve_slave_position(config: MasterConfig, slave_name: str) -> int:
             f"Unknown configured slave '{slave_name}'. Available: {[cfg.name for cfg in config.slaves]}"
         )
 
-    master = pysoem.Master()
+    master = pysoem_mod.Master()
     master.open(config.iface)
     try:
         slave_count = master.config_init()
