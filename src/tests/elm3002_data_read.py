@@ -15,10 +15,25 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from ethercat_core.loop import EthercatLoop
-from ethercat_core.master import EthercatMaster, load_topology, resolve_slave_position
-from ethercat_core.slaves.beckhoff.el3002.adapter import El3002SlaveAdapter
-from ethercat_core.slaves.beckhoff.el3002.data_types import El3002Data
+from ethercat_core.loop import EthercatLoop, LoopConfig
+from ethercat_core.master import EthercatMaster, al_state_name, load_topology, resolve_slave_position
+from ethercat_core.devices.beckhoff.el3002.adapter import El3002SlaveAdapter
+from ethercat_core.devices.beckhoff.el3002.data_types import El3002Data
+
+
+def _parse_cpu_affinity(value: str) -> set[int]:
+    cpus: set[int] = set()
+    for item in value.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        cpu = int(token, 10)
+        if cpu < 0:
+            raise argparse.ArgumentTypeError("CPU indices must be >= 0.")
+        cpus.add(cpu)
+    if not cpus:
+        raise argparse.ArgumentTypeError("CPU affinity must include at least one CPU.")
+    return cpus
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,15 +73,27 @@ def parse_args() -> argparse.Namespace:
         default=10.0,
         help="Visible history window in seconds when --plot is enabled.",
     )
+    parser.add_argument(
+        "--rt-priority",
+        type=int,
+        default=0,
+        help="Loop thread SCHED_FIFO priority (1-99). 0 keeps default scheduler.",
+    )
+    parser.add_argument(
+        "--cpu-affinity",
+        type=_parse_cpu_affinity,
+        default=set(),
+        help="Comma-separated CPU indices for the loop thread, for example '2' or '2,3'.",
+    )
     return parser.parse_args()
 
 
 def _format_status_line(adapter: El3002SlaveAdapter, data: El3002Data) -> str:
     return (
-        f"samples_1_voltage={adapter.get_samples_1_scaled_voltage(data)} "
-        f"samples_1_torque={adapter.get_samples_1_scaled_torque(data)} "
-        f"samples_2_voltage={adapter.get_samples_2_scaled_voltage(data)} "
-        f"samples_2_torque={adapter.get_samples_2_scaled_torque(data)}"
+        f"ch1_voltage={adapter.get_pai_samples_1_scaled_voltage(data):.4f}V "
+        f"ch1_torque={adapter.get_pai_samples_1_scaled_torque(data):.4f} "
+        f"ch2_voltage={adapter.get_pai_samples_2_scaled_voltage(data):.4f}V "
+        f"ch2_torque={adapter.get_pai_samples_2_scaled_torque(data):.4f}"
     )
 
 
@@ -138,10 +165,10 @@ def _run_live_plot(
 
         t = now - start
         time_hist.append(t)
-        ch1_voltage_hist.append(adapter.get_samples_1_scaled_voltage(status))
-        ch2_voltage_hist.append(adapter.get_samples_2_scaled_voltage(status))
-        ch1_torque_hist.append(adapter.get_samples_1_scaled_torque(status))
-        ch2_torque_hist.append(adapter.get_samples_2_scaled_torque(status))
+        ch1_voltage_hist.append(adapter.get_pai_samples_1_scaled_voltage(status))
+        ch2_voltage_hist.append(adapter.get_pai_samples_2_scaled_voltage(status))
+        ch1_torque_hist.append(adapter.get_pai_samples_1_scaled_torque(status))
+        ch2_torque_hist.append(adapter.get_pai_samples_2_scaled_torque(status))
 
         while time_hist and (t - time_hist[0]) > window_s:
             time_hist.popleft()
@@ -189,7 +216,14 @@ def main() -> int:
                 f"Slave '{args.slave}' is not an EL3002. Adapter={type(adapter).__name__}"
             )
 
-        loop = EthercatLoop(runtime, cycle_hz=cfg.cycle_hz)
+        loop = EthercatLoop(
+            runtime,
+            cycle_hz=cfg.cycle_hz,
+            rt_config=LoopConfig(
+                rt_priority=max(0, min(args.rt_priority, 99)),
+                cpu_affinity=args.cpu_affinity,
+            ),
+        )
         loop.start()
 
         deadline = time.monotonic() + max(0.0, args.duration_s)
@@ -198,7 +232,8 @@ def main() -> int:
 
         print(
             f"Monitoring '{args.slave}' at position {resolved_position} "
-            f"for {args.duration_s:.1f}s"
+            f"for {args.duration_s:.1f}s  |  "
+            f"rt_priority={max(0, min(args.rt_priority, 99))} cpu_affinity={sorted(args.cpu_affinity) or 'none'}"
         )
 
         if args.plot:
@@ -215,10 +250,14 @@ def main() -> int:
             if now >= next_print:
                 status = loop.get_status()
                 data = status.by_slave.get(args.slave)
+                stats = loop.stats
+                slave = runtime.slaves_by_name[args.slave]
+                al = al_state_name(int(slave.state))
+                cycle_us = f"{stats.last_cycle_time_ns / 1000:.1f}"
                 if not isinstance(data, El3002Data):
-                    print("input_1=unavailable samples_1=unavailable timestamp=unavailable input_2=unavailable samples_2=unavailable")
+                    print(f"al={al} cycle_us={cycle_us} pai_status_1=unavailable  pai_samples_1=unavailable  pai_status_2=unavailable  pai_samples_2=unavailable")
                 else:
-                    print(_format_status_line(adapter, data))
+                    print(f"al={al} cycle_us={cycle_us} {_format_status_line(adapter, data)}")
                 next_print = now + print_period
             time.sleep(0.005)
 

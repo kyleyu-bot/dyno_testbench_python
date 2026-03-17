@@ -18,7 +18,7 @@ if str(SRC_ROOT) not in sys.path:
 from ethercat_core.data_types import SystemCommand
 from ethercat_core.loop import EthercatLoop
 from ethercat_core.master import EthercatMaster, load_topology
-from ethercat_core.slaves.beckhoff.el2004.data_types import El2004Command
+from ethercat_core.devices.beckhoff.el2004.data_types import El2004Command
 
 
 def parse_args() -> argparse.Namespace:

@@ -11,7 +11,7 @@ from .data_types import (
 )
 from .loop import EthercatLoop, LoopStats
 from .master import EthercatMaster, MasterConfig, MasterConfigError, MasterRuntime, load_topology
-from .slaves.base import SdoReadSpec, SlaveAdapter, SlaveIdentity
+from .devices.base import SdoReadSpec, SlaveAdapter, SlaveIdentity
 
 __all__ = [
     "Command",

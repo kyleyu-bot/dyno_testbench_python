@@ -1,12 +1,12 @@
 {
   "iface": "enp47s0",
-  "cycle_hz": 500,
+  "cycle_hz": 2000,
   "strict_pdo_size": false,
   "slaves": [
     {
       "name": "main_drive",
       "position": 0,
-      "kind": "ds402",
+      "kind": "everest",
       "vendor_id": 668,
       "product_code": 62066689,
       "scaling": {
@@ -95,7 +95,7 @@
     {
       "name": "analog_input_interface",
       "position": 2,
-      "kind": "EL3002",
+      "kind": "ELM3002",
       "vendor_id": 2,
       "product_code": 1344368041,
       "scaling": {},
