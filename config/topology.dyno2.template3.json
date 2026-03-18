@@ -1,6 +1,6 @@
 {
   "iface": "enp47s0",
-  "cycle_hz": 500,
+  "cycle_hz": 1000,
   "strict_pdo_size": false,
   "slaves": [
     {
