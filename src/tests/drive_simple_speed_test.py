@@ -18,8 +18,8 @@ if str(SRC_ROOT) not in sys.path:
 from ethercat_core.data_types import SystemCommand
 from ethercat_core.loop import EthercatLoop
 from ethercat_core.master import EthercatMaster, load_topology, resolve_slave_position
-from ethercat_core.slaves.base import SdoReadSpec
-from ethercat_core.slaves.ds402.data_types import Command, ModeOfOperation
+from ethercat_core.devices.base import SdoReadSpec
+from ethercat_core.devices.ds402.data_types import Command, ModeOfOperation
 
 
 def parse_args() -> argparse.Namespace:

@@ -16,8 +16,8 @@ if str(SRC_ROOT) not in sys.path:
 
 from ethercat_core.loop import EthercatLoop
 from ethercat_core.master import EthercatMaster, load_topology, resolve_slave_position
-from ethercat_core.slaves.beckhoff.el5032.adapter import El5032SlaveAdapter
-from ethercat_core.slaves.beckhoff.el5032.data_types import El5032Data
+from ethercat_core.devices.beckhoff.el5032.adapter import El5032SlaveAdapter
+from ethercat_core.devices.beckhoff.el5032.data_types import El5032Data
 
 
 def parse_args() -> argparse.Namespace:

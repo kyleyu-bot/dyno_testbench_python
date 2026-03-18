@@ -16,12 +16,12 @@ except ImportError:  # pragma: no cover - depends on host environment.
     pysoem = None
 
 from .data_types import EthercatAlStates
-from .slaves.base import SdoReadSpec, SlaveAdapter, SlaveIdentity
-from .slaves.beckhoff.el2004.adapter import El2004SlaveAdapter
-from .slaves.beckhoff.el3002.adapter import El3002SlaveAdapter
-from .slaves.beckhoff.el5032.adapter import El5032SlaveAdapter
-from .slaves.ds402.adapter import Ds402SlaveAdapter
-from .slaves.ds402.pdo import PdoScaling
+from .devices.base import SdoReadSpec, SlaveAdapter, SlaveIdentity
+from .devices.beckhoff.el2004.adapter import El2004SlaveAdapter
+from .devices.beckhoff.el3002.adapter import El3002SlaveAdapter
+from .devices.beckhoff.el5032.adapter import El5032SlaveAdapter
+from .devices.ds402.adapter import Ds402SlaveAdapter
+from .devices.ds402.pdo import PdoScaling
 
 
 class MasterConfigError(RuntimeError):
@@ -35,7 +35,7 @@ def _pysoem_missing_message() -> str:
         "pysoem is not installed for the active interpreter.\n"
         f"interpreter: {sys.executable}\n"
         "Install it with the repo bootstrap script:\n"
-        f"  {repo_root}/scripts/bootstrap_venv_ecat.sh\n"
+        f"  {repo_root}/env_setup_scripts/bootstrap_venv_ecat.sh\n"
         "Then run this tool with the EtherCAT venv interpreter:\n"
         f"  {venv_python} <script> [args]"
     )

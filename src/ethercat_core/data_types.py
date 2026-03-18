@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any, Dict
 
-from .slaves.ds402.data_types import (
+from .devices.ds402.data_types import (
     Command,
     DriveCiA402States,
     DriveStatus,
