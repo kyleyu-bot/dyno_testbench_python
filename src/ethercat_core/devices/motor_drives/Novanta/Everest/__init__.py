@@ -1,6 +1,6 @@
-"""DS402 slave module."""
+"""Novanta Everest drive module."""
 
-from .adapter import Ds402SlaveAdapter
+from .adapter import NovantaEverestSlaveAdapter
 from .data_types import Command, DriveCiA402States, DriveStatus, ModeOfOperation
 from .pdo import PdoScaling, decode_cia402_state, pack_command, unpack_status
 
@@ -13,5 +13,5 @@ __all__ = [
     "decode_cia402_state",
     "pack_command",
     "unpack_status",
-    "Ds402SlaveAdapter",
+    "NovantaEverestSlaveAdapter",
 ]

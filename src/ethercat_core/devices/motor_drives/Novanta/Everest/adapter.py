@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..base import SdoReadSpec, SlaveIdentity
+from ....base import SdoReadSpec, SlaveIdentity
 from .data_types import Command, DriveStatus
 from .pdo import PdoScaling, RX_PDO_STRUCT, TX_PDO_STRUCT, pack_command, unpack_status
 
 
 @dataclass(slots=True)
-class Ds402SlaveAdapter:
+class NovantaEverestSlaveAdapter:
     """Adapter that encapsulates DS402-specific cyclic PDO mapping."""
 
     identity: SlaveIdentity
@@ -80,5 +80,5 @@ class Ds402SlaveAdapter:
         return status
 
     def startup_read_specs(self) -> dict[str, SdoReadSpec]:
-        """Named DS402 startup SDOs available for pre-remap readout."""
+        """Named NovantaEverest startup SDOs available for pre-remap readout."""
         return dict(self._startup_read_specs)

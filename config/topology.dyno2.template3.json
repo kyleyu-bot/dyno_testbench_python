@@ -6,7 +6,7 @@
     {
       "name": "main_drive",
       "position": 0,
-      "kind": "ds402",
+      "kind": "everest",
       "vendor_id": 668,
       "product_code": 62066689,
       "scaling": {

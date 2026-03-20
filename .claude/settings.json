@@ -9,7 +9,8 @@
       "Bash(mv /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/el3002_sdo_read.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/elm3002_sdo_read.py)",
       "Bash(mv /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/el3002_input_read.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/elm3002_input_read.py)",
       "Bash(mv /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/el3002_pdo_check.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/elm3002_pdo_check.py)",
-      "Bash(mv /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/el3002_data_read.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/elm3002_data_read.py)"
+      "Bash(mv /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/el3002_data_read.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/elm3002_data_read.py)",
+      "Bash(python3:*)"
     ]
   }
 }

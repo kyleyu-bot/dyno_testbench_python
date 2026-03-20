@@ -1,17 +1,13 @@
-"""DS402 slave module."""
+"""DS402 drive base module."""
 
 from .adapter import Ds402SlaveAdapter
-from .data_types import Command, DriveCiA402States, DriveStatus, ModeOfOperation
-from .pdo import PdoScaling, decode_cia402_state, pack_command, unpack_status
+from .data_types import DriveCiA402States, DriveCommandBase, ModeOfOperation
+from .pdo import decode_cia402_state
 
 __all__ = [
+    "Ds402SlaveAdapter",
     "ModeOfOperation",
     "DriveCiA402States",
-    "Command",
-    "DriveStatus",
-    "PdoScaling",
+    "DriveCommandBase",
     "decode_cia402_state",
-    "pack_command",
-    "unpack_status",
-    "Ds402SlaveAdapter",
 ]
