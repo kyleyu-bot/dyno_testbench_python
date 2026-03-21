@@ -16,10 +16,10 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from ethercat_core.data_types import SystemCommand
-from ethercat_core.loop import EthercatLoop
+from ethercat_core.loop import EthercatLoop, LoopConfig
 from ethercat_core.master import EthercatMaster, load_topology, resolve_slave_position
 from ethercat_core.devices.base import SdoReadSpec
-from ethercat_core.devices.ds402.data_types import Command, ModeOfOperation
+from ethercat_core.devices.motor_drives.Novanta.Everest.data_types import Command, ModeOfOperation
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,7 +81,34 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print raw + decoded SDO values for 0x250A/0x250B at startup.",
     )
+    parser.add_argument(
+        "--rt-priority",
+        type=int,
+        default=0,
+        help="Loop thread SCHED_FIFO priority (1-99). 0 keeps default scheduler.",
+    )
+    parser.add_argument(
+        "--cpu-affinity",
+        type=_parse_cpu_affinity,
+        default=set(),
+        help="Comma-separated CPU indices for the loop thread, e.g. '2' or '2,3'.",
+    )
     return parser.parse_args()
+
+
+def _parse_cpu_affinity(value: str) -> set[int]:
+    cpus: set[int] = set()
+    for item in value.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        cpu = int(token, 10)
+        if cpu < 0:
+            raise argparse.ArgumentTypeError("CPU indices must be >= 0.")
+        cpus.add(cpu)
+    if not cpus:
+        raise argparse.ArgumentTypeError("CPU affinity must include at least one CPU.")
+    return cpus
 
 
 def _clamp_i32(value: int) -> int:
@@ -235,7 +262,15 @@ def main() -> int:
             print(f"Forced SDO mode write: 0x6060={args.mode}")
         print(f"Using '{args.slave}' at position {resolved_position}")
 
-        loop = EthercatLoop(runtime, cycle_hz=cfg.cycle_hz)
+        rt_priority = max(0, min(args.rt_priority, 99))
+        loop = EthercatLoop(
+            runtime,
+            cycle_hz=cfg.cycle_hz,
+            rt_config=LoopConfig(
+                rt_priority=rt_priority,
+                cpu_affinity=args.cpu_affinity,
+            ),
+        )
         loop.start()
 
         t0 = time.monotonic()

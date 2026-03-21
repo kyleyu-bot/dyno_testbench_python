@@ -21,7 +21,7 @@ from ethercat_core.devices.beckhoff.el3002.adapter import El3002SlaveAdapter
 from ethercat_core.devices.beckhoff.el3002.data_types import El3002Data
 from ethercat_core.devices.beckhoff.el5032.adapter import El5032SlaveAdapter
 from ethercat_core.devices.beckhoff.el5032.data_types import El5032Data
-from ethercat_core.devices.ds402.data_types import Command, ModeOfOperation
+from ethercat_core.devices.motor_drives.Novanta.Everest.data_types import Command, ModeOfOperation
 
 
 def _parse_cpu_affinity(value: str) -> set[int]:
