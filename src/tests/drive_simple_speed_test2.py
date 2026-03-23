@@ -19,7 +19,7 @@ from ethercat_core.data_types import SystemCommand
 from ethercat_core.loop import EthercatLoop, LoopConfig
 from ethercat_core.master import EthercatMaster, load_topology, resolve_slave_position
 from ethercat_core.devices.base import SdoReadSpec
-from ethercat_core.devices.motor_drives.Novanta.Volcano.data_types import Command, ModeOfOperation
+from ethercat_core.devices.motor_drives.Novanta.Volcano.data_types import Command, DriveCiA402States, ModeOfOperation
 
 
 def parse_args() -> argparse.Namespace:
@@ -285,10 +285,17 @@ def main() -> int:
             now = time.monotonic()
             in_reset = now < reset_deadline
 
+            status = loop.get_status()
+            ds = status.by_slave.get(args.slave)
+            drive_enabled = (
+                ds is not None
+                and ds.cia402_state == DriveCiA402States.OPERATION_ENABLED
+            )
+
             cmd = Command(
                 mode_of_operation=cmd_mode,
                 target_torque_nm=0.0,
-                target_velocity_rad_s=float(speed_cmd_i32),
+                target_velocity_rad_s=float(speed_cmd_i32) if drive_enabled else 0.0,
                 target_position_rad=0.0,
                 torque_kp=torque_kp,
                 torque_loop_max_output=vel_qr,
@@ -305,9 +312,7 @@ def main() -> int:
             loop.set_command(SystemCommand(by_slave={args.slave: cmd}))
 
             if now >= next_print:
-                status = loop.get_status()
                 stats = loop.stats
-                ds = status.by_slave.get(args.slave)
                 if ds is None:
                     print(
                         f"cycle={stats.cycle_count} wkc={stats.last_wkc} cmd_60FF={speed_cmd_i32} speed_606C=unavailable"

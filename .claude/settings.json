@@ -10,7 +10,13 @@
       "Bash(mv /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/el3002_input_read.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/elm3002_input_read.py)",
       "Bash(mv /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/el3002_pdo_check.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/elm3002_pdo_check.py)",
       "Bash(mv /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/el3002_data_read.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/elm3002_data_read.py)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(wc -l /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/ethercat_core/*.py)",
+      "Bash(wc -l /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tools/*.py /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/cli/*.py)",
+      "Bash(wc -l /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/tests/*.py)",
+      "Bash(grep -h \"^import\\\\|^from\" /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/**/*.py)",
+      "Bash(xargs find:*)",
+      "Bash(find /home/dyno-nuc2/gitRepos/dyno_testbench_python/src/ethercat_core/devices -name \"*.py\" -type f -exec wc -l {} +)"
     ]
   }
 }
