@@ -20,8 +20,10 @@ from .devices.base import SdoReadSpec, SlaveAdapter, SlaveIdentity
 from .devices.beckhoff.el2004.adapter import El2004SlaveAdapter
 from .devices.beckhoff.el3002.adapter import El3002SlaveAdapter
 from .devices.beckhoff.el5032.adapter import El5032SlaveAdapter
-from .devices.ds402.adapter import Ds402SlaveAdapter
-from .devices.ds402.pdo import PdoScaling
+from .devices.motor_drives.Novanta.Everest.adapter import NovantaEverestSlaveAdapter
+from .devices.motor_drives.Novanta.Everest.pdo import PdoScaling as EverestPdoScaling
+from .devices.motor_drives.Novanta.Volcano.adapter import NovantaVolcanoSlaveAdapter
+from .devices.motor_drives.Novanta.Volcano.pdo import PdoScaling as VolcanoPdoScaling
 
 
 class MasterConfigError(RuntimeError):
@@ -126,18 +128,23 @@ def _build_adapter(cfg: SlaveConfig) -> SlaveAdapter[Any, Any]:
         product_code=cfg.product_code,
     )
 
-    if cfg.kind == "ds402":
-        scaling = PdoScaling(
+    if cfg.kind == "everest":
+        scaling = EverestPdoScaling(
             torque_lsb_per_nm=float(cfg.scaling.get("torque_lsb_per_nm", 10.0)),
-            velocity_lsb_per_rad_s=float(
-                cfg.scaling.get("velocity_lsb_per_rad_s", 1000.0)
-            ),
+            velocity_lsb_per_rad_s=float(cfg.scaling.get("velocity_lsb_per_rad_s", 1000.0)),
             position_lsb_per_rad=float(cfg.scaling.get("position_lsb_per_rad", 10000.0)),
         )
-        return Ds402SlaveAdapter(identity=identity, scaling=scaling)
+        return NovantaEverestSlaveAdapter(identity=identity, scaling=scaling)
+    if cfg.kind == "volcano":
+        scaling = VolcanoPdoScaling(
+            torque_lsb_per_nm=float(cfg.scaling.get("torque_lsb_per_nm", 10.0)),
+            velocity_lsb_per_rad_s=float(cfg.scaling.get("velocity_lsb_per_rad_s", 1000.0)),
+            position_lsb_per_rad=float(cfg.scaling.get("position_lsb_per_rad", 10000.0)),
+        )
+        return NovantaVolcanoSlaveAdapter(identity=identity, scaling=scaling)
     if cfg.kind == "EL2004":
         return El2004SlaveAdapter(identity=identity)
-    if cfg.kind == "EL3002":
+    if cfg.kind in ("EL3002", "ELM3002"):
         return El3002SlaveAdapter(identity=identity)
     if cfg.kind == "EL5032":
         return El5032SlaveAdapter(identity=identity)

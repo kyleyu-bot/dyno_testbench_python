@@ -21,7 +21,14 @@ from ethercat_core.devices.beckhoff.el3002.adapter import El3002SlaveAdapter
 from ethercat_core.devices.beckhoff.el3002.data_types import El3002Data
 from ethercat_core.devices.beckhoff.el5032.adapter import El5032SlaveAdapter
 from ethercat_core.devices.beckhoff.el5032.data_types import El5032Data
-from ethercat_core.devices.motor_drives.Novanta.Everest.data_types import Command, ModeOfOperation
+from ethercat_core.devices.motor_drives.Novanta.Everest.data_types import (
+    Command as EverestCommand,
+    DriveCiA402States,
+    ModeOfOperation,
+)
+from ethercat_core.devices.motor_drives.Novanta.Volcano.data_types import (
+    Command as VolcanoCommand,
+)
 
 
 def _parse_cpu_affinity(value: str) -> set[int]:
@@ -45,13 +52,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--topology",
-        default="config/topology.dyno2.template3.json",
-        help="Path to topology JSON file (must include all 4 devices).",
+        default="config/topology.dyno2.template5.json",
+        help="Path to topology JSON file (must include all devices).",
     )
     parser.add_argument(
         "--drive-slave",
         default="main_drive",
-        help="Configured DS402 drive slave name.",
+        help="Configured Everest DS402 drive slave name.",
+    )
+    parser.add_argument(
+        "--dut-slave",
+        default="dut",
+        help="Configured Volcano DS402 drive slave name.",
     )
     parser.add_argument(
         "--encoder-slave",
@@ -67,7 +79,13 @@ def parse_args() -> argparse.Namespace:
         "--speed",
         type=int,
         default=0,
-        help="Speed command as int32 sent to the main_drive (0x60FF).",
+        help="Speed command as int32 sent to the main_drive / Everest (0x60FF).",
+    )
+    parser.add_argument(
+        "--dut-speed",
+        type=int,
+        default=0,
+        help="Speed command as int32 sent to the dut / Volcano (0x60FF).",
     )
     parser.add_argument(
         "--duration-s",
@@ -112,7 +130,7 @@ def main() -> int:
     cfg = load_topology(args.topology)
 
     # Resolve positions for all relevant slaves.
-    for slave_name in (args.drive_slave, args.encoder_slave, args.torque_slave):
+    for slave_name in (args.drive_slave, args.dut_slave, args.encoder_slave, args.torque_slave):
         resolved = resolve_slave_position(cfg, slave_name)
         for slave_cfg in cfg.slaves:
             if slave_cfg.name == slave_name:
@@ -129,6 +147,13 @@ def main() -> int:
         if drive_adapter is None:
             raise RuntimeError(
                 f"Drive slave '{args.drive_slave}' not found. "
+                f"Available: {list(runtime.adapters.keys())}"
+            )
+
+        dut_adapter = runtime.adapters.get(args.dut_slave)
+        if dut_adapter is None:
+            raise RuntimeError(
+                f"DUT slave '{args.dut_slave}' not found. "
                 f"Available: {list(runtime.adapters.keys())}"
             )
 
@@ -163,24 +188,39 @@ def main() -> int:
         print_period = 1.0 / max(args.print_hz, 0.1)
         next_print = t0
 
-        speed_cmd_i32 = _clamp_i32(int(args.speed))
+        drive_speed_i32 = _clamp_i32(int(args.speed))
+        dut_speed_i32 = _clamp_i32(int(args.dut_speed))
 
-        startup_params = dict(runtime.startup_params.get(args.drive_slave, {}))
-        torque_kp = float(startup_params.get("motor_kt", 0.0))
-        if abs(torque_kp) > 1e-9:
-            torque_kp = 1.0 / torque_kp
-        vel_qr = float(startup_params.get("torque_loop_max_output", 0.0))
-        vel_is = float(startup_params.get("torque_loop_min_output", 0.0))
-        vel_kp = float(startup_params.get("velocity_loop_kp", 0.0))
-        vel_ki = float(startup_params.get("velocity_loop_ki", 0.0))
-        vel_kd = float(startup_params.get("velocity_loop_kd", 0.0))
-        pos_kp = float(startup_params.get("position_loop_kp", 0.0))
-        pos_ki = float(startup_params.get("position_loop_ki", 0.0))
-        pos_kd = float(startup_params.get("position_loop_kd", 0.0))
+        drive_startup = dict(runtime.startup_params.get(args.drive_slave, {}))
+        drive_torque_kp = float(drive_startup.get("motor_kt", 0.0))
+        if abs(drive_torque_kp) > 1e-9:
+            drive_torque_kp = 1.0 / drive_torque_kp
+        drive_vel_qr = float(drive_startup.get("torque_loop_max_output", 0.0))
+        drive_vel_is = float(drive_startup.get("torque_loop_min_output", 0.0))
+        drive_vel_kp = float(drive_startup.get("velocity_loop_kp", 0.0))
+        drive_vel_ki = float(drive_startup.get("velocity_loop_ki", 0.0))
+        drive_vel_kd = float(drive_startup.get("velocity_loop_kd", 0.0))
+        drive_pos_kp = float(drive_startup.get("position_loop_kp", 0.0))
+        drive_pos_ki = float(drive_startup.get("position_loop_ki", 0.0))
+        drive_pos_kd = float(drive_startup.get("position_loop_kd", 0.0))
+
+        dut_startup = dict(runtime.startup_params.get(args.dut_slave, {}))
+        dut_torque_kp = float(dut_startup.get("motor_kt", 0.0))
+        if abs(dut_torque_kp) > 1e-9:
+            dut_torque_kp = 1.0 / dut_torque_kp
+        dut_vel_qr = float(dut_startup.get("torque_loop_max_output", 0.0))
+        dut_vel_is = float(dut_startup.get("torque_loop_min_output", 0.0))
+        dut_vel_kp = float(dut_startup.get("velocity_loop_kp", 0.0))
+        dut_vel_ki = float(dut_startup.get("velocity_loop_ki", 0.0))
+        dut_vel_kd = float(dut_startup.get("velocity_loop_kd", 0.0))
+        dut_pos_kp = float(dut_startup.get("position_loop_kp", 0.0))
+        dut_pos_ki = float(dut_startup.get("position_loop_ki", 0.0))
+        dut_pos_kd = float(dut_startup.get("position_loop_kd", 0.0))
 
         print(
             f"Starting integrated dyno test | "
-            f"speed_cmd={speed_cmd_i32} duration={args.duration_s:.1f}s | "
+            f"drive_speed={drive_speed_i32} dut_speed={dut_speed_i32} "
+            f"duration={args.duration_s:.1f}s | "
             f"rt_priority={rt_priority} cpu_affinity={sorted(args.cpu_affinity) or 'none'}"
         )
 
@@ -188,41 +228,88 @@ def main() -> int:
             now = time.monotonic()
             in_reset = now < reset_deadline
 
-            cmd = Command(
+            status = loop.get_status()
+
+            # --- Everest (main_drive): independent OPERATION_ENABLED check ---
+            ds_drive = status.by_slave.get(args.drive_slave)
+            drive_enabled = (
+                ds_drive is not None
+                and ds_drive.cia402_state == DriveCiA402States.OPERATION_ENABLED
+            )
+            drive_cmd = EverestCommand(
                 mode_of_operation=ModeOfOperation.CYCLIC_SYNC_VELOCITY,
                 target_torque_nm=0.0,
-                target_velocity_rad_s=float(speed_cmd_i32),
+                target_velocity_rad_s=float(drive_speed_i32) if drive_enabled else 0.0,
                 target_position_rad=0.0,
-                torque_kp=torque_kp,
-                torque_loop_max_output=vel_qr,
-                torque_loop_min_output=vel_is,
-                velocity_loop_kp=vel_kp,
-                velocity_loop_ki=vel_ki,
-                velocity_loop_kd=vel_kd,
-                position_loop_kp=pos_kp,
-                position_loop_ki=pos_ki,
-                position_loop_kd=pos_kd,
+                torque_kp=drive_torque_kp,
+                torque_loop_max_output=drive_vel_qr,
+                torque_loop_min_output=drive_vel_is,
+                velocity_loop_kp=drive_vel_kp,
+                velocity_loop_ki=drive_vel_ki,
+                velocity_loop_kd=drive_vel_kd,
+                position_loop_kp=drive_pos_kp,
+                position_loop_ki=drive_pos_ki,
+                position_loop_kd=drive_pos_kd,
                 enable_drive=not in_reset,
                 clear_fault=in_reset,
             )
-            loop.set_command(SystemCommand(by_slave={args.drive_slave: cmd}))
+
+            # --- Volcano (dut): independent OPERATION_ENABLED check ---
+            ds_dut = status.by_slave.get(args.dut_slave)
+            dut_enabled = (
+                ds_dut is not None
+                and ds_dut.cia402_state == DriveCiA402States.OPERATION_ENABLED
+            )
+            dut_cmd = VolcanoCommand(
+                mode_of_operation=ModeOfOperation.CYCLIC_SYNC_VELOCITY,
+                target_torque_nm=0.0,
+                target_velocity_rad_s=float(dut_speed_i32) if dut_enabled else 0.0,
+                target_position_rad=0.0,
+                torque_kp=dut_torque_kp,
+                torque_loop_max_output=dut_vel_qr,
+                torque_loop_min_output=dut_vel_is,
+                velocity_loop_kp=dut_vel_kp,
+                velocity_loop_ki=dut_vel_ki,
+                velocity_loop_kd=dut_vel_kd,
+                position_loop_kp=dut_pos_kp,
+                position_loop_ki=dut_pos_ki,
+                position_loop_kd=dut_pos_kd,
+                enable_drive=not in_reset,
+                clear_fault=in_reset,
+            )
+
+            loop.set_command(SystemCommand(by_slave={
+                args.drive_slave: drive_cmd,
+                args.dut_slave: dut_cmd,
+            }))
 
             if now >= next_print:
-                status = loop.get_status()
                 stats = loop.stats
 
-                # Drive status.
-                ds = status.by_slave.get(args.drive_slave)
+                # Everest drive status.
                 drive_slave = runtime.slaves_by_name[args.drive_slave]
                 drive_al = al_state_name(int(drive_slave.state))
-                if ds is None:
-                    drive_str = f"al={drive_al} state=unavailable speed_cmd={speed_cmd_i32} speed_fb=unavailable"
+                if ds_drive is None:
+                    drive_str = f"al={drive_al} state=unavailable speed_cmd={drive_speed_i32} speed_fb=unavailable"
                 else:
                     drive_str = (
                         f"al={drive_al} "
-                        f"state={ds.cia402_state.name} "
-                        f"speed_cmd={speed_cmd_i32} "
-                        f"speed_fb={int(ds.measured_velocity_rad_s)}"
+                        f"state={ds_drive.cia402_state.name} "
+                        f"speed_cmd={drive_speed_i32} "
+                        f"speed_fb={int(ds_drive.measured_velocity_rad_s)}"
+                    )
+
+                # Volcano dut status.
+                dut_slave = runtime.slaves_by_name[args.dut_slave]
+                dut_al = al_state_name(int(dut_slave.state))
+                if ds_dut is None:
+                    dut_str = f"al={dut_al} state=unavailable speed_cmd={dut_speed_i32} speed_fb=unavailable"
+                else:
+                    dut_str = (
+                        f"al={dut_al} "
+                        f"state={ds_dut.cia402_state.name} "
+                        f"speed_cmd={dut_speed_i32} "
+                        f"speed_fb={int(ds_dut.measured_velocity_rad_s)}"
                     )
 
                 # EL5032 encoder.
@@ -243,7 +330,12 @@ def main() -> int:
                     )
 
                 cycle_us = f"{stats.last_cycle_time_ns / 1000:.1f}"
-                print(f"cycle_us={cycle_us} | {drive_str} | {enc_str} | {torque_str}")
+                print(
+                    f"cycle_us={cycle_us} | "
+                    f"drive({args.drive_slave}): {drive_str} | "
+                    f"dut({args.dut_slave}): {dut_str} | "
+                    f"{enc_str} | {torque_str}"
+                )
                 next_print = now + print_period
 
             time.sleep(0.005)

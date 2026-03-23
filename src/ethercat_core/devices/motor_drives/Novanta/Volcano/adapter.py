@@ -1,21 +1,20 @@
-"""DS402 slave adapter implementation."""
+"""Novanta Volcano slave adapter implementation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..base import SdoReadSpec, SlaveIdentity
+from ....base import SdoReadSpec
+from ...drive_bases.ds402.adapter import Ds402SlaveAdapter
 from .data_types import Command, DriveStatus
 from .pdo import PdoScaling, RX_PDO_STRUCT, TX_PDO_STRUCT, pack_command, unpack_status
 
 
 @dataclass(slots=True)
-class Ds402SlaveAdapter:
-    """Adapter that encapsulates DS402-specific cyclic PDO mapping."""
+class NovantaVolcanoSlaveAdapter(Ds402SlaveAdapter):
+    """Adapter that encapsulates DS402-specific cyclic PDO mapping for the Novanta Volcano."""
 
-    identity: SlaveIdentity
     scaling: PdoScaling = field(default_factory=PdoScaling)
-    _last_status_word: int = 0
     _startup_read_specs: dict[str, SdoReadSpec] = field(
         default_factory=lambda: {
             "torque_loop_max_output": SdoReadSpec(
@@ -80,5 +79,5 @@ class Ds402SlaveAdapter:
         return status
 
     def startup_read_specs(self) -> dict[str, SdoReadSpec]:
-        """Named DS402 startup SDOs available for pre-remap readout."""
+        """Named NovantaVolcano startup SDOs available for pre-remap readout."""
         return dict(self._startup_read_specs)

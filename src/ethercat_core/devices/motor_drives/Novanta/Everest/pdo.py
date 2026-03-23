@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from struct import Struct
 
 from .data_types import Command, DriveCiA402States, DriveStatus
+from ...drive_bases.ds402.pdo import (
+    _clamp_i32,
+    _controlword_from_command,
+    _decode_statusword_bits,
+    decode_cia402_state,
+)
 
 # Master -> drive cyclic command payload for mapped 0x1600 + 0x1601.
 # 0x1600: 0x6040(U16), 0x6060(S8), 0x607A(S32), 0x60FF(S32), 0x2022(F32), 0x2523(F32)
@@ -43,78 +49,6 @@ def _clamp_i16(value: int) -> int:
 
 def _clamp_i32(value: int) -> int:
     return max(-2147483648, min(2147483647, value))
-
-
-def decode_cia402_state(status_word: int) -> DriveCiA402States:
-    """Decode CiA 402 logical state from statusword (0x6041)."""
-
-    state_004f = status_word & 0x004F
-    state_006f = status_word & 0x006F
-
-    if state_004f == 0x0000:
-        return DriveCiA402States.NOT_READY_TO_SWITCH_ON
-    if state_004f == 0x0040:
-        return DriveCiA402States.SWITCH_ON_DISABLED
-    if state_006f == 0x0021:
-        return DriveCiA402States.READY_TO_SWITCH_ON
-    if state_006f == 0x0023:
-        return DriveCiA402States.SWITCHED_ON
-    if state_006f == 0x0027:
-        return DriveCiA402States.OPERATION_ENABLED
-    if state_006f == 0x0007:
-        return DriveCiA402States.QUICK_STOP_ACTIVE
-    if state_004f == 0x000F:
-        return DriveCiA402States.FAULT_REACTION_ACTIVE
-    if state_004f == 0x0008:
-        return DriveCiA402States.FAULT
-    return DriveCiA402States.NOT_READY_TO_SWITCH_ON
-
-
-def _decode_statusword_bits(status_word: int) -> dict[str, bool]:
-    return {
-        "ready_to_switch_on": bool(status_word & (1 << 0)),
-        "switched_on": bool(status_word & (1 << 1)),
-        "operation_enabled": bool(status_word & (1 << 2)),
-        "fault": bool(status_word & (1 << 3)),
-        "voltage_enabled": bool(status_word & (1 << 4)),
-        "quick_stop_active": not bool(status_word & (1 << 5)),
-        "switch_on_disabled": bool(status_word & (1 << 6)),
-        "warning": bool(status_word & (1 << 7)),
-        "remote": bool(status_word & (1 << 9)),
-        "target_reached": bool(status_word & (1 << 10)),
-    }
-
-
-def _controlword_from_command(
-    command: Command, current_state: DriveCiA402States
-) -> int:
-    if command.clear_fault and current_state == DriveCiA402States.FAULT:
-        return 0x0080
-    if not command.enable_drive:
-        if current_state in (
-            DriveCiA402States.OPERATION_ENABLED,
-            DriveCiA402States.SWITCHED_ON,
-            DriveCiA402States.READY_TO_SWITCH_ON,
-            DriveCiA402States.SWITCH_ON_DISABLED,
-            DriveCiA402States.QUICK_STOP_ACTIVE,
-        ):
-            return 0x0006  # Shutdown
-        return 0x0000  # Disable voltage
-
-    if current_state == DriveCiA402States.SWITCH_ON_DISABLED:
-        return 0x0006  # Shutdown -> Ready to switch on
-    if current_state == DriveCiA402States.READY_TO_SWITCH_ON:
-        return 0x0007  # Switch on
-    if current_state == DriveCiA402States.SWITCHED_ON:
-        return 0x000F  # Enable operation
-    if current_state == DriveCiA402States.OPERATION_ENABLED:
-        return 0x000F  # Hold operation enabled
-    if current_state == DriveCiA402States.QUICK_STOP_ACTIVE:
-        return 0x000F  # Recover to operation enabled path
-    if current_state == DriveCiA402States.FAULT:
-        return 0x0080 if command.clear_fault else 0x0000
-    return 0x0000
-
 
 def pack_command(
     command: Command, scaling: PdoScaling | None = None, current_status_word: int = 0
@@ -177,7 +111,7 @@ def unpack_status(
     cycle_time_ns: int = 0,
     dc_time_error_ns: int = 0,
 ) -> DriveStatus:
-    """Unpack DS402 TX PDO bytes into `DriveStatus`."""
+    """Unpack NovantaEverest TX PDO bytes into `DriveStatus`."""
 
     if len(pdo) < LEGACY_TX_PDO_STRUCT.size:
         raise ValueError(

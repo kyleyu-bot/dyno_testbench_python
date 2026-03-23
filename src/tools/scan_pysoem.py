@@ -65,6 +65,7 @@ def main() -> int:
                     f"man=0x{slave.man:08x}, "
                     f"id=0x{slave.id:08x}, "
                     f"rev=0x{slave.rev:08x}, "
+                    f"alias={int.from_bytes(slave.eeprom_read(4)[:2], 'little')}, "
                     f"name='{slave.name}'"
                 )
         else:
